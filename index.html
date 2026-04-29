@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Guess Game PRO</title>
+
+<style>
+body {
+  font-family: Arial;
+  text-align: center;
+  background: linear-gradient(135deg, #00c6ff, #7b2ff7);
+  color: white;
+}
+
+.container {
+  margin: 20px;
+  padding: 20px;
+  border-radius: 20px;
+  backdrop-filter: blur(15px);
+  background: rgba(255,255,255,0.1);
+  box-shadow: 0 0 25px rgba(0,0,0,0.3);
+}
+
+input {
+  padding: 12px;
+  border-radius: 15px;
+  border: none;
+  width: 80%;
+  margin: 10px;
+}
+
+button {
+  padding: 12px 20px;
+  border: none;
+  border-radius: 20px;
+  margin: 10px;
+  color: white;
+  font-weight: bold;
+  background: linear-gradient(90deg,#00f0ff,#7b2ff7);
+  box-shadow: 0 0 15px #00f0ff;
+}
+
+button:hover {
+  box-shadow: 0 0 25px #00f0ff;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h2>🎯 Guess Game PRO</h2>
+
+<input id="name" placeholder="Enter name">
+<br>
+<button onclick="saveName()">Save</button>
+
+<h3 id="player"></h3>
+<p>Level: <span id="level">1</span></p>
+<p>💰 Coins: <span id="coins">0</span></p>
+
+<hr>
+
+<input id="guessInput" placeholder="Enter number">
+<br>
+
+<button onclick="startGame()">▶️ Play</button>
+<button onclick="guess()">Guess</button>
+
+<p id="msg"></p>
+<p>⏱ <span id="time">0</span>s</p>
+
+<button onclick="resetGame()">Reset</button>
+
+<hr>
+
+<h3>🛒 Shop</h3>
+<button onclick="buyTime()">+10s (10 coins)</button>
+<button onclick="buyHint()">Hint (20 coins)</button>
+
+<hr>
+
+<h3>🏆 Global Leaderboard</h3>
+<ul id="board"></ul>
+
+</div>
+
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import {
+  getFirestore,
+  doc,
+  setDoc,
+  collection,
+  getDocs,
+  query,
+  orderBy,
+  limit
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+/* 🔥 FIREBASE CONFIG */
+const firebaseConfig = {
+  apiKey: "AIzaSyCxSZ5-wSnG7IoljqMc6njHEmTv7dAUF7c",
+  authDomain: "number-guessing-669c4.firebaseapp.com",
+  projectId: "number-guessing-669c4",
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+/* 🧠 UNIQUE PLAYER ID */
+let playerId = localStorage.getItem("playerId");
+
+if(!playerId){
+  playerId = "player_" + Math.random().toString(36).substr(2,9);
+  localStorage.setItem("playerId", playerId);
+}
+
+/* GAME STATE */
+let number, time, timer;
+let playing = false;
+
+let coins = Number(localStorage.getItem("coins")) || 0;
+let level = Number(localStorage.getItem("level")) || 1;
+let name = localStorage.getItem("name") || "";
+
+document.getElementById("coins").innerText = coins;
+document.getElementById("level").innerText = level;
+document.getElementById("player").innerText = name;
+
+/* SAVE NAME */
+window.saveName = function(){
+  name = document.getElementById("name").value;
+  localStorage.setItem("name", name);
+  document.getElementById("player").innerText = name;
+};
+
+/* START GAME */
+window.startGame = function(){
+  number = Math.floor(Math.random() * (level * 10)) + 1;
+  time = 30;
+  playing = true;
+
+  document.getElementById("msg").innerText = "Game started!";
+
+  clearInterval(timer);
+
+  timer = setInterval(()=>{
+    time--;
+    document.getElementById("time").innerText = time;
+
+    if(time <= 0){
+      clearInterval(timer);
+      playing = false;
+      document.getElementById("msg").innerText = "⛔ Time's up!";
+    }
+  },1000);
+};
+
+/* GUESS */
+window.guess = async function(){
+
+  if(!playing){
+    document.getElementById("msg").innerText = "Press ▶️ Play first!";
+    return;
+  }
+
+  if(time <= 0){
+    document.getElementById("msg").innerText = "⛔ Time finished!";
+    return;
+  }
+
+  let g = Number(document.getElementById("guessInput").value);
+
+  if(g === number){
+    document.getElementById("msg").innerText = "🎉 Correct!";
+    coins += 5;
+    level++;
+
+    saveProgress();
+    updateUI();
+
+    playing = false;
+    clearInterval(timer);
+
+    await saveToFirebase();
+
+  } else if(g > number){
+    document.getElementById("msg").innerText = "📉 Too high!";
+  } else {
+    document.getElementById("msg").innerText = "📈 Too low!";
+  }
+};
+
+/* SHOP */
+window.buyTime = function(){
+  if(coins >= 10){
+    coins -= 10;
+    time += 10;
+    updateUI();
+    saveProgress();
+  }
+};
+
+window.buyHint = function(){
+  if(coins >= 20){
+    coins -= 20;
+    let hint = number % 2 === 0 ? "Even" : "Odd";
+    document.getElementById("msg").innerText = "Hint: " + hint;
+    updateUI();
+    saveProgress();
+  }
+};
+
+/* RESET */
+window.resetGame = function(){
+  playing = false;
+  clearInterval(timer);
+  document.getElementById("msg").innerText = "";
+  document.getElementById("time").innerText = 0;
+};
+
+/* SAVE LOCAL */
+function saveProgress(){
+  localStorage.setItem("coins", coins);
+  localStorage.setItem("level", level);
+}
+
+function updateUI(){
+  document.getElementById("coins").innerText = coins;
+  document.getElementById("level").innerText = level;
+}
+
+/* 🔥 SAVE UNIQUE PLAYER */
+async function saveToFirebase(){
+  if(!name) return;
+
+  await setDoc(doc(db,"leaderboard",playerId),{
+    name: name,
+    level: level,
+    updated: Date.now()
+  });
+
+  loadLeaderboard();
+}
+
+/* LOAD LEADERBOARD */
+async function loadLeaderboard(){
+  const q = query(
+    collection(db,"leaderboard"),
+    orderBy("level","desc"),
+    limit(5)
+  );
+
+  const snap = await getDocs(q);
+
+  let list = document.getElementById("board");
+  list.innerHTML = "";
+
+  let i = 1;
+
+  snap.forEach(doc=>{
+    let d = doc.data();
+    list.innerHTML += `<li>#${i} 🏆 ${d.name} - Level ${d.level}</li>`;
+    i++;
+  });
+}
+
+loadLeaderboard();
+
+</script>
+
+</body>
+</html>
