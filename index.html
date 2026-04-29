@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guess Game PRO</title>
+
+<style>
+body {
+  margin: 0;
+  font-family: Arial;
+  background: linear-gradient(135deg, #1e3c72, #2a5298);
+  color: white;
+  text-align: center;
+}
+
+/* LOADER */
+#loader {
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle, #000, #1e3c72);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+#logo {
+  width: 180px;
+  animation: zoomGlow 2s infinite alternate;
+}
+
+@keyframes zoomGlow {
+  0% { transform: scale(0.8); opacity: 0.6; }
+  100% { transform: scale(1.1); opacity: 1; }
+}
+
+.fade-out {
+  opacity: 0;
+  transition: 0.8s;
+}
+
+/* GLASS CARD */
+.card {
+  margin: 20px;
+  padding: 20px;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.1);
+  backdrop-filter: blur(10px);
+}
+
+/* INPUT */
+input {
+  padding: 10px;
+  border-radius: 10px;
+  border: none;
+  width: 70%;
+  margin: 10px;
+}
+
+/* NEON BUTTON */
+button {
+  padding: 12px 25px;
+  border: none;
+  border-radius: 20px;
+  background: linear-gradient(45deg, #00f2ff, #ff00ff);
+  color: white;
+  font-size: 16px;
+  margin: 10px;
+  box-shadow: 0 0 10px #00f2ff;
+}
+
+/* TEXT */
+h1 { font-size: 28px; }
+</style>
+</head>
+
+<body>
+
+<!-- LOADING SCREEN -->
+<div id="loader">
+  <img src="logo.png" id="logo">
+</div>
+
+<div class="card">
+
+<h1>🎯 Guess Game PRO</h1>
+
+<input id="name" placeholder="Enter name">
+<br>
+<button onclick="saveName()">Save</button>
+
+<h2 id="player"></h2>
+<p>Level: <span id="level">1</span></p>
+<p>💰 Coins: <span id="coins">0</span></p>
+
+<input id="guess" placeholder="Enter number">
+<br>
+
+<button onclick="startGame()">▶ Play</button>
+<button onclick="check()">Guess</button>
+
+<p id="result"></p>
+<p>⏱ <span id="time">0</span>s</p>
+
+<button onclick="resetGame()">Reset</button>
+
+<hr>
+
+<h2>🛒 Shop</h2>
+<button onclick="buyTime()">+10s (10 coins)</button>
+<button onclick="buyHint()">Hint (20 coins)</button>
+
+<hr>
+
+<h2>🏆 Leaderboard</h2>
+<ul id="board"></ul>
+
+</div>
+
+<script>
+let number = Math.floor(Math.random()*10)+1;
+let level = localStorage.getItem("level") || 1;
+let coins = localStorage.getItem("coins") || 0;
+let time = 0;
+let timer;
+let playing = false;
+
+document.getElementById("level").innerText = level;
+document.getElementById("coins").innerText = coins;
+document.getElementById("player").innerText = localStorage.getItem("name") || "";
+
+/* SAVE NAME */
+function saveName(){
+  let n = document.getElementById("name").value;
+  localStorage.setItem("name", n);
+  document.getElementById("player").innerText = n;
+}
+
+/* START GAME */
+function startGame(){
+  if(playing) return;
+  playing = true;
+  time = 20;
+
+  timer = setInterval(()=>{
+    time--;
+    document.getElementById("time").innerText = time;
+
+    if(time <= 0){
+      clearInterval(timer);
+      playing = false;
+      document.getElementById("result").innerText = "⏰ Time up!";
+    }
+  },1000);
+}
+
+/* GUESS */
+function check(){
+  if(!playing) return;
+
+  let g = Number(document.getElementById("guess").value);
+
+  if(g === number){
+    document.getElementById("result").innerText = "🎉 Correct!";
+    level++;
+    coins = Number(coins) + 5;
+
+    localStorage.setItem("level", level);
+    localStorage.setItem("coins", coins);
+
+    document.getElementById("level").innerText = level;
+    document.getElementById("coins").innerText = coins;
+
+    number = Math.floor(Math.random()*10)+1;
+    clearInterval(timer);
+    playing = false;
+
+    saveLeaderboard();
+  } else {
+    document.getElementById("result").innerText = g > number ? "📉 Too high!" : "📈 Too low!";
+  }
+}
+
+/* RESET */
+function resetGame(){
+  clearInterval(timer);
+  playing = false;
+  number = Math.floor(Math.random()*10)+1;
+  document.getElementById("result").innerText = "";
+  document.getElementById("time").innerText = 0;
+}
+
+/* SHOP */
+function buyTime(){
+  if(coins >= 10){
+    coins -= 10;
+    time += 10;
+    localStorage.setItem("coins", coins);
+    document.getElementById("coins").innerText = coins;
+  }
+}
+
+function buyHint(){
+  if(coins >= 20){
+    coins -= 20;
+    localStorage.setItem("coins", coins);
+    document.getElementById("coins").innerText = coins;
+    alert("Number is between " + (number-2) + " and " + (number+2));
+  }
+}
+
+/* LEADERBOARD */
+function saveLeaderboard(){
+  let name = localStorage.getItem("name") || "Player";
+  let board = JSON.parse(localStorage.getItem("board")) || [];
+
+  board.push({name, level});
+  board.sort((a,b)=>b.level-a.level);
+
+  localStorage.setItem("board", JSON.stringify(board));
+  loadBoard();
+}
+
+function loadBoard(){
+  let board = JSON.parse(localStorage.getItem("board")) || [];
+  let html = "";
+
+  board.slice(0,5).forEach((p,i)=>{
+    html += `<li>#${i+1} 🏆 ${p.name} - Level ${p.level}</li>`;
+  });
+
+  document.getElementById("board").innerHTML = html;
+}
+
+loadBoard();
+
+/* LOADER */
+window.onload = function () {
+  setTimeout(()=>{
+    let loader = document.getElementById("loader");
+    loader.classList.add("fade-out");
+
+    setTimeout(()=>{
+      loader.style.display = "none";
+    },800);
+  },2000);
+};
+</script>
+
+</body>
+</html>
