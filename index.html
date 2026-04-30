@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guess Game PRO v2</title>
+
+<style>
+body {
+    margin: 0;
+    font-family: Arial;
+    text-align: center;
+    color: white;
+    background: radial-gradient(circle, #0a1f44, #000);
+}
+.container { padding: 20px; }
+
+button {
+    margin: 10px;
+    padding: 12px 25px;
+    border: none;
+    border-radius: 25px;
+    color: white;
+    font-size: 16px;
+    background: linear-gradient(45deg, cyan, magenta);
+}
+
+input {
+    padding: 12px;
+    border-radius: 10px;
+    border: none;
+    width: 80%;
+    margin: 10px;
+    font-size: 16px;
+}
+
+#message { height: 24px; margin-top: 10px; }
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>🎮 Guess Game PRO v2</h1>
+
+<h2 id="playerName"></h2>
+
+<p>Level: <span id="level"></span></p>
+<p>💰 Coins: <span id="coins"></span></p>
+<p>🎯 Range: 1 - <span id="range"></span></p>
+
+<input id="input" placeholder="Enter number">
+
+<br>
+
+<button onclick="play()">▶ Play</button>
+<button id="guessBtn" onclick="guess()">Guess</button>
+
+<div id="message"></div>
+
+<p>⏱ <span id="time">60</span>s</p>
+
+<button onclick="newRound()">🔁 New Round</button>
+
+<hr>
+
+<h3>📊 Stats</h3>
+<p>Games: <span id="games"></span></p>
+<p>Wins: <span id="wins"></span></p>
+
+<hr>
+
+<h3>🏆 Leaderboard (LIVE)</h3>
+<div id="leaderboard"></div>
+
+</div>
+
+<!-- Firebase v8 (COMPATIBLE VERSION) -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+<script>
+
+// ✅ YOUR CONFIG (FIXED: added databaseURL)
+const firebaseConfig = {
+  apiKey: "AIzaSyCxSZ5-wSnG7IoljqMc6njHEmTv7dAUF7c",
+  authDomain: "number-guessing-669c4.firebaseapp.com",
+  databaseURL: "https://number-guessing-669c4-default-rtdb.firebaseio.com",
+  projectId: "number-guessing-669c4",
+  storageBucket: "number-guessing-669c4.appspot.com",
+  messagingSenderId: "691796417532",
+  appId: "1:691796417532:web:37fbe39f524b27ca823079"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// ===== PROFILE =====
+let player = JSON.parse(localStorage.getItem("player"));
+
+if (!player) {
+    player = {
+        id: Date.now(),
+        name: "Player " + Math.floor(Math.random()*1000),
+        level: 1,
+        coins: 0,
+        games: 0,
+        wins: 0
+    };
+}
+
+// ===== GAME STATE =====
+let target = 0;
+let max = 100;
+let roundOver = false;
+
+// ===== TIMER =====
+let timeLeft = 60;
+let timer;
+
+// ===== ELEMENTS =====
+const input = document.getElementById("input");
+const message = document.getElementById("message");
+
+// ===== SAVE =====
+function saveAll() {
+    localStorage.setItem("player", JSON.stringify(player));
+
+    db.ref("leaderboard/" + player.id).set({
+        name: player.name,
+        level: player.level,
+        coins: player.coins
+    });
+}
+
+// ===== UI =====
+function updateUI() {
+    document.getElementById("playerName").innerHTML = "👑 " + player.name;
+    document.getElementById("level").textContent = player.level;
+    document.getElementById("coins").textContent = player.coins;
+    document.getElementById("range").textContent = max;
+    document.getElementById("games").textContent = player.games;
+    document.getElementById("wins").textContent = player.wins;
+}
+
+// ===== MESSAGE =====
+function showMessage(text) {
+    message.textContent = text;
+}
+
+// ===== TIMER =====
+function startTimer() {
+    clearInterval(timer);
+    timeLeft = 60;
+    document.getElementById("time").textContent = timeLeft;
+
+    timer = setInterval(() => {
+        timeLeft--;
+        document.getElementById("time").textContent = timeLeft;
+
+        if (timeLeft <= 0) {
+            clearInterval(timer);
+            roundOver = true;
+            showMessage("⏰ Time's up!");
+        }
+    }, 1000);
+}
+
+// ===== PLAY =====
+function play() {
+    max = player.level * 100;
+    target = Math.floor(Math.random() * max) + 1;
+
+    roundOver = false;
+    document.getElementById("guessBtn").disabled = false;
+
+    player.games++;
+    saveAll();
+
+    startTimer();
+
+    showMessage("🎯 Game started!");
+    updateUI();
+}
+
+// ===== GUESS =====
+function guess() {
+
+    if (roundOver) return;
+
+    let value = Number(input.value);
+
+    if (!value) {
+        showMessage("⚠ Enter number");
+        return;
+    }
+
+    if (value === target) {
+
+        roundOver = true;
+        clearInterval(timer);
+        document.getElementById("guessBtn").disabled = true;
+
+        player.level++;
+        player.coins += 5;
+        player.wins++;
+
+        saveAll();
+        updateUI();
+
+        showMessage("🎉 Correct!");
+
+    } else if (value < target) {
+        showMessage("📉 Too low");
+    } else {
+        showMessage("📈 Too high");
+    }
+}
+
+// ===== NEW ROUND =====
+function newRound() {
+    input.value = "";
+    showMessage("");
+    roundOver = false;
+
+    document.getElementById("guessBtn").disabled = false;
+
+    clearInterval(timer);
+    document.getElementById("time").textContent = 60;
+}
+
+// ===== LIVE LEADERBOARD =====
+db.ref("leaderboard").on("value", (snapshot)=>{
+
+    let data = snapshot.val();
+    let list = Object.values(data || {});
+
+    list.sort((a,b)=>b.level-a.level);
+
+    let html = "";
+
+    list.forEach((p, i) => {
+        let crown = i === 0 ? " 👑" : "";
+        html += `<p>#${i+1} ${p.name}${crown} - Lvl ${p.level}</p>`;
+    });
+
+    document.getElementById("leaderboard").innerHTML = html;
+});
+
+// ===== INIT =====
+updateUI();
+
+</script>
+
+</body>
+</html>
